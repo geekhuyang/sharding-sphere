@@ -33,14 +33,14 @@ import java.util.Map;
  *
  * @author zhangliang
  */
-public final class ParserResultSetLoader {
+public class ParserResultSetLoader {
     
     private static final ParserResultSetLoader INSTANCE = new ParserResultSetLoader();
     
-    private final Map<String, ParserResult> parserResultMap;
+    protected Map<String, ParserResult> parserResultMap;
     
-    private ParserResultSetLoader() {
-        parserResultMap = loadParserResultSet();
+    protected ParserResultSetLoader() {
+        parserResultMap = loadParserResultSet("parser/");
     }
     
     /**
@@ -52,8 +52,12 @@ public final class ParserResultSetLoader {
         return INSTANCE;
     }
     
-    private Map<String, ParserResult> loadParserResultSet() {
-        URL url = ParserResultSetLoader.class.getClassLoader().getResource("parser/");
+    public void switchResult(String dirName) {
+        parserResultMap = loadParserResultSet(dirName);
+    }
+    
+    protected Map<String, ParserResult> loadParserResultSet(String dirName) {
+        URL url = ParserResultSetLoader.class.getClassLoader().getResource(dirName);
         Preconditions.checkNotNull(url, "Cannot found parser test cases.");
         File[] files = new File(url.getPath()).listFiles();
         Preconditions.checkNotNull(files, "Cannot found parser test cases.");
@@ -64,11 +68,22 @@ public final class ParserResultSetLoader {
         return result;
     }
     
-    private Map<String, ParserResult> loadParserResultSet(final File file) {
+    protected Map<String, ParserResult> loadParserResultSet(final File file) {
         Map<String, ParserResult> result = new HashMap<>(Short.MAX_VALUE, 1);
         try {
-            for (ParserResult each : ((ParserResultSet) JAXBContext.newInstance(ParserResultSet.class).createUnmarshaller().unmarshal(file)).getParserResults()) {
-                result.put(each.getSqlCaseId(), each);
+            if(file.isDirectory()) {
+                for (File each : file.listFiles()) {
+                    result.putAll(loadParserResultSet(each));
+                } 
+            }else {
+                ParserResultSet resultSet = (ParserResultSet)JAXBContext.newInstance(ParserResultSet.class).createUnmarshaller().unmarshal(file);
+                for (ParserResult each : resultSet.getParserResults()) {
+                    if(null != resultSet.getNamespace()) {
+                        result.put(resultSet.getNamespace()+"."+each.getSqlCaseId(), each);
+                    }else {
+                        result.put(each.getSqlCaseId(), each);
+                    }
+                }
             }
         } catch (JAXBException ex) {
             throw new RuntimeException(ex);
@@ -83,7 +98,7 @@ public final class ParserResultSetLoader {
      * @return parser assert
      */
     public ParserResult getParserResult(final String sqlCaseId) {
-        Preconditions.checkState(parserResultMap.containsKey(sqlCaseId), "Can't find SQL of id: " + sqlCaseId);
+//        Preconditions.checkState(parserResultMap.containsKey(sqlCaseId), "Can't find SQL of id: " + sqlCaseId);
         return parserResultMap.get(sqlCaseId);
     }
     
